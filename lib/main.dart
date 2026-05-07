@@ -1,4 +1,4 @@
-// lib/main.dart — LIVE VERSION with Firebase
+// lib/main.dart — LIVE VERSION with Firebase Update and AuthProvider Integration
 
 
 import 'firebase_options.dart';
