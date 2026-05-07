@@ -1,0 +1,29 @@
+// storage.rules
+// Deploy with: firebase deploy --only storage
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Visit Photos ──────────────────────────────────────────────────────
+    match /visit_photos/{userId}/{filename} {
+
+      // Read: owner or any authenticated manager
+      allow read: if request.auth != null &&
+        (request.auth.uid == userId ||
+         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'manager');
+
+      // Write: only the file owner can upload
+      allow write: if request.auth != null &&
+        request.auth.uid == userId &&
+        // File size limit: 5MB
+        request.resource.size < 5 * 1024 * 1024 &&
+        // Only JPEG/PNG
+        request.resource.contentType.matches('image/(jpeg|png|jpg)');
+
+      // No deletions
+      allow delete: if false;
+    }
+  }
+}

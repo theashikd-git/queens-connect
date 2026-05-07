@@ -1,0 +1,76 @@
+// firestore.rules
+// Deploy with: firebase deploy --only firestore:rules
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper Functions ──────────────────────────────────────────────────
+
+    // Check if request is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Get the current user's role from Firestore
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    // Check if current user is a manager
+    function isManager() {
+      return isAuth() && getUserRole() == 'manager';
+    }
+
+    // Check if current user is the owner of a document
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+
+    // ── Users Collection ─────────────────────────────────────────────────
+    match /users/{userId} {
+      // Users can read their own profile; managers can read all profiles
+      allow read: if isOwner(userId) || isManager();
+
+      // Only managers can create/update user profiles (admin use)
+      allow create, update: if isManager();
+
+      // No deletions
+      allow delete: if false;
+    }
+
+    // ── Hospitals Collection ─────────────────────────────────────────────
+    match /hospitals/{hospitalId} {
+      // All authenticated users can read hospitals (for form dropdown)
+      allow read: if isAuth();
+
+      // Only managers can modify hospital data
+      allow create, update, delete: if isManager();
+    }
+
+    // ── Visits Collection ────────────────────────────────────────────────
+    match /visits/{visitId} {
+      // Field users can read their own visits; managers can read all
+      allow read: if isAuth() &&
+        (resource.data.user_id == request.auth.uid || isManager());
+
+      // Authenticated field users can create visits
+      allow create: if isAuth() &&
+        request.resource.data.user_id == request.auth.uid &&
+        // Required fields must be present
+        request.resource.data.keys().hasAll([
+          'user_id', 'user_name', 'manual_hospital_name',
+          'doctor_name', 'purpose', 'gps_latitude',
+          'gps_longitude', 'gps_accuracy', 'timestamp', 'status'
+        ]);
+
+      // Users cannot edit visits after submission (GPS data integrity)
+      // Managers can update status if needed
+      allow update: if isManager();
+
+      // No deletions (audit trail)
+      allow delete: if false;
+    }
+  }
+}
