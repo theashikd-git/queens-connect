@@ -1,4 +1,5 @@
 // lib/presentation/manager/manager_dashboard_screen.dart
+// Shows real user name from Firebase on every visit card
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +16,8 @@ class ManagerDashboardScreen extends StatefulWidget {
   const ManagerDashboardScreen({super.key});
 
   @override
-  State<ManagerDashboardScreen> createState() => _ManagerDashboardScreenState();
+  State<ManagerDashboardScreen> createState() =>
+      _ManagerDashboardScreenState();
 }
 
 class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
@@ -46,11 +48,25 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final managerName = authProvider.currentUser?.name ?? 'Manager';
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceWhite,
       appBar: AppBar(
-        title: const Text('Manager Dashboard'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Manager Dashboard'),
+            Text(
+              'Welcome, $managerName',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_rounded),
@@ -82,34 +98,107 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
   Widget _buildVisitsTab() {
     return Column(
       children: [
-        // ── Filter chips ──
-        _buildFilterBar(),
+        // Filter chips
+        Container(
+          color: AppTheme.cardWhite,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _filters.map((f) {
+                final isSelected = _selectedFilter == f['key'];
+                Color? chipColor;
+                if (f['key'] != 'all') {
+                  chipColor = AppTheme.statusColor(f['key']!);
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text(f['label']!),
+                    selected: isSelected,
+                    onSelected: (_) => setState(
+                        () => _selectedFilter = f['key']!),
+                    selectedColor:
+                        (chipColor ?? AppTheme.primaryBlue)
+                            .withValues(alpha: 0.15),
+                    labelStyle: TextStyle(
+                      color: isSelected
+                          ? (chipColor ?? AppTheme.primaryBlue)
+                          : AppTheme.textSecondary,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                    side: BorderSide(
+                      color: isSelected
+                          ? (chipColor ?? AppTheme.primaryBlue)
+                              .withValues(alpha: 0.5)
+                          : AppTheme.dividerColor,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
 
-        // ── Visit list ──
+        // Visit list
         Expanded(
           child: StreamBuilder<List<VisitModel>>(
             stream: _selectedFilter == 'all'
                 ? _visitService.streamAllVisits()
-                : _visitService.streamVisitsByStatus(_selectedFilter),
+                : _visitService
+                    .streamVisitsByStatus(_selectedFilter),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState ==
+                  ConnectionState.waiting) {
                 return const Center(
-                  child: CircularProgressIndicator(color: AppTheme.primaryBlue),
+                  child: CircularProgressIndicator(
+                      color: AppTheme.primaryBlue),
                 );
               }
 
               if (snapshot.hasError) {
-                return _buildError(snapshot.error.toString());
+                return Center(
+                  child: Text('Error: ${snapshot.error}',
+                      style: const TextStyle(
+                          color: AppTheme.errorRed)),
+                );
               }
 
               final visits = snapshot.data ?? [];
 
               if (visits.isEmpty) {
-                return _buildEmptyState();
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.assignment_outlined,
+                          size: 64,
+                          color: AppTheme.textTertiary
+                              .withValues(alpha: 0.5)),
+                      const SizedBox(height: 16),
+                      const Text('No visits found',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                              color: AppTheme.textPrimary)),
+                      const SizedBox(height: 8),
+                      const Text(
+                          'Visits will appear here once submitted.',
+                          style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 14)),
+                    ],
+                  ),
+                );
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                padding:
+                    const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 itemCount: visits.length,
                 itemBuilder: (context, index) =>
                     _buildVisitCard(visits[index]),
@@ -118,49 +207,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildFilterBar() {
-    return Container(
-      color: AppTheme.cardWhite,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: _filters.map((f) {
-            final isSelected = _selectedFilter == f['key'];
-            Color? chipColor;
-            if (f['key'] != 'all') {
-              chipColor = AppTheme.statusColor(f['key']!);
-            }
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: FilterChip(
-                label: Text(f['label']!),
-                selected: isSelected,
-                onSelected: (_) =>
-                    setState(() => _selectedFilter = f['key']!),
-                selectedColor: (chipColor ?? AppTheme.primaryBlue).withValues(alpha: 0.15),
-                checkmarkColor: chipColor ?? AppTheme.primaryBlue,
-                labelStyle: TextStyle(
-                  color: isSelected
-                      ? (chipColor ?? AppTheme.primaryBlue)
-                      : AppTheme.textSecondary,
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.normal,
-                  fontSize: 13,
-                ),
-                side: BorderSide(
-                  color: isSelected
-                      ? (chipColor ?? AppTheme.primaryBlue).withValues(alpha: 0.5)
-                      : AppTheme.dividerColor,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
     );
   }
 
@@ -188,14 +234,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
         ),
         child: Column(
           children: [
-            // ── Header ──
+            // ── Header: User name + timestamp + status ──
             Padding(
               padding: const EdgeInsets.all(14),
               child: Row(
                 children: [
-                  // Avatar with initials
+                  // Avatar with initials of user name
                   CircleAvatar(
-                    backgroundColor: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                    backgroundColor:
+                        AppTheme.primaryBlue.withValues(alpha: 0.1),
                     radius: 22,
                     child: Text(
                       _getInitials(visit.userName),
@@ -211,11 +258,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Real user name from Firebase
                         Text(
                           visit.userName,
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
-                            fontSize: 14,
+                            fontSize: 15,
                             color: AppTheme.textPrimary,
                           ),
                         ),
@@ -237,7 +285,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
 
             const Divider(height: 1),
 
-            // ── Visit Info ──
+            // ── Visit info ──
             Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
@@ -253,24 +301,32 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                     'Doctor',
                     visit.doctorName,
                   ),
+                  const SizedBox(height: 8),
+                  _infoRow(
+                    Icons.assignment_outlined,
+                    'Purpose',
+                    visit.purpose,
+                  ),
                   if (visit.distanceFromHospital != null) ...[
                     const SizedBox(height: 8),
                     _infoRow(
                       Icons.straighten_rounded,
                       'Distance',
-                      DistanceUtils.formatDistance(visit.distanceFromHospital!),
-                      valueColor: AppTheme.statusColor(visit.status),
+                      DistanceUtils.formatDistance(
+                          visit.distanceFromHospital!),
+                      valueColor:
+                          AppTheme.statusColor(visit.status),
                     ),
                   ],
                 ],
               ),
             ),
 
-            // ── Footer flags ──
+            // ── Flag banner for suspicious ──
             if (visit.isMockGps || visit.status == 'suspicious')
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 8),
                 decoration: const BoxDecoration(
                   color: Color(0xFFFFF3F3),
                   borderRadius: BorderRadius.only(
@@ -285,8 +341,8 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                     const SizedBox(width: 6),
                     Text(
                       visit.isMockGps
-                          ? 'Mock GPS Detected'
-                          : 'Location mismatch — review needed',
+                          ? '⚠ Mock GPS Detected — ${visit.userName}'
+                          : '⚠ Location mismatch — review needed',
                       style: const TextStyle(
                         color: AppTheme.errorRed,
                         fontSize: 11,
@@ -294,18 +350,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                       ),
                     ),
                     const Spacer(),
-                    const Text(
-                      'Tap to review →',
-                      style: TextStyle(
-                        color: AppTheme.errorRed,
-                        fontSize: 11,
-                      ),
-                    ),
+                    const Text('Tap →',
+                        style: TextStyle(
+                            color: AppTheme.errorRed, fontSize: 11)),
                   ],
                 ),
-              )
-            else
-              const SizedBox.shrink(),
+              ),
           ],
         ),
       ),
@@ -318,11 +368,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
       children: [
         Icon(icon, size: 14, color: AppTheme.textTertiary),
         const SizedBox(width: 6),
-        Text(
-          '$label: ',
-          style:
-              const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-        ),
+        Text('$label: ',
+            style: const TextStyle(
+                color: AppTheme.textSecondary, fontSize: 12)),
         Expanded(
           child: Text(
             value,
@@ -344,11 +392,16 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-              child: CircularProgressIndicator(color: AppTheme.primaryBlue));
+              child: CircularProgressIndicator(
+                  color: AppTheme.primaryBlue));
         }
 
         final stats = snapshot.data ??
             {'total': 0, 'valid': 0, 'warning': 0, 'suspicious': 0};
+
+        final total = stats['total']!;
+        final valid = stats['valid']!;
+        final rate = total > 0 ? valid / total * 100 : 0.0;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -360,8 +413,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                 subtitle: 'Overall field activity overview',
               ),
               const SizedBox(height: 16),
-
-              // ── Stats Grid ──
               GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
@@ -370,37 +421,59 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                 crossAxisSpacing: 12,
                 childAspectRatio: 1.4,
                 children: [
-                  _statCard(
-                    'Total Visits',
-                    stats['total'].toString(),
-                    Icons.analytics_rounded,
-                    AppTheme.primaryBlue,
-                  ),
-                  _statCard(
-                    'Valid',
-                    stats['valid'].toString(),
-                    Icons.check_circle_rounded,
-                    AppTheme.successGreen,
-                  ),
-                  _statCard(
-                    'Warning',
-                    stats['warning'].toString(),
-                    Icons.warning_amber_rounded,
-                    AppTheme.warningAmber,
-                  ),
-                  _statCard(
-                    'Suspicious',
-                    stats['suspicious'].toString(),
-                    Icons.gpp_bad_rounded,
-                    AppTheme.errorRed,
-                  ),
+                  _statCard('Total Visits', '${stats['total']}',
+                      Icons.analytics_rounded, AppTheme.primaryBlue),
+                  _statCard('Valid', '${stats['valid']}',
+                      Icons.check_circle_rounded,
+                      AppTheme.successGreen),
+                  _statCard('Warning', '${stats['warning']}',
+                      Icons.warning_amber_rounded,
+                      AppTheme.warningAmber),
+                  _statCard('Suspicious', '${stats['suspicious']}',
+                      Icons.gpp_bad_rounded, AppTheme.errorRed),
                 ],
               ),
-
-              const SizedBox(height: 24),
-
-              // ── Compliance Rate ──
-              if (stats['total']! > 0) _buildComplianceRate(stats),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardWhite,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.dividerColor),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Compliance Rate',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            color: AppTheme.textPrimary)),
+                    const SizedBox(height: 4),
+                    Text(
+                        '${rate.toStringAsFixed(1)}% of visits are valid',
+                        style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12)),
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: rate / 100,
+                        minHeight: 12,
+                        backgroundColor: AppTheme.dividerColor,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          rate > 70
+                              ? AppTheme.successGreen
+                              : rate > 40
+                                  ? AppTheme.warningAmber
+                                  : AppTheme.errorRed,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         );
@@ -432,120 +505,17 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                value,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 12,
-                ),
-              ),
+              Text(value,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800)),
+              Text(label,
+                  style: const TextStyle(
+                      color: AppTheme.textSecondary, fontSize: 12)),
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildComplianceRate(Map<String, int> stats) {
-    final total = stats['total']!;
-    final valid = stats['valid']!;
-    final rate = total > 0 ? (valid / total * 100) : 0.0;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Compliance Rate',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${rate.toStringAsFixed(1)}% of visits are within valid range',
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: rate / 100,
-              minHeight: 12,
-              backgroundColor: AppTheme.dividerColor,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                rate > 70
-                    ? AppTheme.successGreen
-                    : rate > 40
-                        ? AppTheme.warningAmber
-                        : AppTheme.errorRed,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppTheme.primaryBlue.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.assignment_outlined,
-              size: 40,
-              color: AppTheme.primaryBlue,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'No Visits Found',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 18,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Visits will appear here once submitted by field staff.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildError(String error) {
-    return Center(
-      child: Text(
-        'Error loading visits: $error',
-        style: const TextStyle(color: AppTheme.errorRed),
       ),
     );
   }

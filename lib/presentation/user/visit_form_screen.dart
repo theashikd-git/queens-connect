@@ -1,6 +1,6 @@
-// lib/presentation/user/visit_form_screen.dart — LIVE VERSION
-// GPS captured silently — user never sees it
-// Hospital and purpose are free text inputs
+// lib/presentation/user/visit_form_screen.dart
+// Shows real user name from Firebase
+// GPS hidden from user — captured silently
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -28,7 +28,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Silently capture GPS in background — user never sees this
+      // Capture GPS silently in background
       context.read<VisitFormProvider>().captureLocation();
     });
   }
@@ -51,7 +51,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
 
     final success = await provider.submitVisit(
       userId: user.id,
-      userName: user.name,
+      userName: user.name, // Real name from Firebase Firestore
       manualHospitalName: _hospitalController.text.trim(),
       doctorName: _doctorController.text.trim(),
       purpose: _purposeController.text.trim(),
@@ -68,8 +68,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -84,14 +84,11 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   color: AppTheme.successGreen, size: 36),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Visit Submitted!',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-                color: AppTheme.textPrimary,
-              ),
-            ),
+            const Text('Visit Submitted!',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    color: AppTheme.textPrimary)),
             const SizedBox(height: 8),
             const Text(
               'Your visit has been recorded successfully.',
@@ -111,7 +108,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   _doctorController.clear();
                   _purposeController.clear();
                   _notesController.clear();
-                  // Silently recapture GPS for next visit
                   context.read<VisitFormProvider>().captureLocation();
                 },
                 child: const Text('New Visit'),
@@ -151,26 +147,49 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── Greeting ──
+                  // ── Greeting with REAL user name from Firebase ──
                   if (user != null) _buildGreeting(user.name),
                   const SizedBox(height: 20),
 
-                  // ── Visit Details Card ──
+                  // ── Visit Details ──
                   _buildVisitCard(),
                   const SizedBox(height: 16),
 
-                  // ── Photo Card ──
+                  // ── Photo ──
                   _buildPhotoCard(formProvider),
                   const SizedBox(height: 16),
 
-                  // ── Error Banner ──
+                  // ── Error ──
                   if (formProvider.errorMessage != null &&
                       formProvider.status == FormStatus.error)
-                    _buildErrorBanner(formProvider.errorMessage!),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: AppTheme.errorRed
+                                  .withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                color: AppTheme.errorRed, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(formProvider.errorMessage!,
+                                  style: const TextStyle(
+                                      color: AppTheme.errorRed,
+                                      fontSize: 13)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
-                  const SizedBox(height: 8),
-
-                  // ── Submit Button ──
+                  // ── Submit ──
                   SizedBox(
                     height: 54,
                     child: ElevatedButton.icon(
@@ -195,7 +214,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ),
           ),
 
-          // Loading overlay during submission only
           if (isSubmitting)
             const LoadingOverlay(message: 'Submitting visit...'),
         ],
@@ -203,6 +221,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
     );
   }
 
+  // Shows real name from Firebase
   Widget _buildGreeting(String name) {
     final hour = DateTime.now().hour;
     final greeting = hour < 12
@@ -223,9 +242,18 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
       ),
       child: Row(
         children: [
-          const CircleAvatar(
+          // Circle with first letter of name
+          CircleAvatar(
             backgroundColor: Colors.white24,
-            child: Icon(Icons.person_rounded, color: Colors.white),
+            radius: 22,
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -233,7 +261,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$greeting, ${name.split(' ').first}!',
+                  '$greeting, $name!',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -241,7 +269,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                   ),
                 ),
                 Text(
-                  DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
+                  DateFormat('EEEE, d MMMM yyyy')
+                      .format(DateTime.now()),
                   style: const TextStyle(
                       color: Colors.white70, fontSize: 12),
                 ),
@@ -270,13 +299,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ),
           const SizedBox(height: 20),
 
-          // ── Hospital Name (free text) ──
+          // Hospital — free text
           TextFormField(
             controller: _hospitalController,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(
               labelText: 'Hospital / Clinic Name',
-              hintText: 'e.g. Dhaka Medical College Hospital',
+              hintText: 'Type the hospital name',
               prefixIcon: Icon(Icons.local_hospital_outlined),
             ),
             validator: (v) => v == null || v.trim().isEmpty
@@ -285,7 +314,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ),
           const SizedBox(height: 16),
 
-          // ── Doctor Name ──
+          // Doctor — free text
           TextFormField(
             controller: _doctorController,
             textCapitalization: TextCapitalization.words,
@@ -300,13 +329,13 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ),
           const SizedBox(height: 16),
 
-          // ── Purpose of Visit (free text) ──
+          // Purpose — free text
           TextFormField(
             controller: _purposeController,
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
               labelText: 'Purpose of Visit',
-              hintText: 'e.g. Product introduction, Follow-up visit...',
+              hintText: 'e.g. Product introduction, Follow-up...',
               prefixIcon: Icon(Icons.assignment_outlined),
             ),
             validator: (v) => v == null || v.trim().isEmpty
@@ -315,15 +344,14 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
           ),
           const SizedBox(height: 16),
 
-          // ── Notes (optional) ──
+          // Notes — optional
           TextFormField(
             controller: _notesController,
             maxLines: 3,
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(
               labelText: 'Notes (Optional)',
-              hintText:
-                  'Any additional observations or follow-up actions...',
+              hintText: 'Additional observations or follow-up...',
               alignLabelWithHint: true,
               prefixIcon: Padding(
                 padding: EdgeInsets.only(bottom: 44),
@@ -352,9 +380,7 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             subtitle: 'Take a photo as evidence (optional)',
           ),
           const SizedBox(height: 16),
-
           if (provider.photoFile != null) ...[
-            // Photo preview
             Stack(
               children: [
                 ClipRRect(
@@ -374,9 +400,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: const BoxDecoration(
-                        color: Colors.black54,
-                        shape: BoxShape.circle,
-                      ),
+                          color: Colors.black54,
+                          shape: BoxShape.circle),
                       child: const Icon(Icons.close_rounded,
                           color: Colors.white, size: 16),
                     ),
@@ -396,8 +421,8 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: provider.pickPhoto,
-                    icon:
-                        const Icon(Icons.camera_alt_outlined, size: 18),
+                    icon: const Icon(Icons.camera_alt_outlined,
+                        size: 18),
                     label: const Text('Camera'),
                   ),
                 ),
@@ -414,37 +439,6 @@ class _VisitFormScreenState extends State<VisitFormScreen> {
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildErrorBanner(String message) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEE2E2),
-          borderRadius: BorderRadius.circular(12),
-          border:
-              Border.all(color: AppTheme.errorRed.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.error_outline,
-                color: AppTheme.errorRed, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                    color: AppTheme.errorRed,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -1,4 +1,5 @@
-// lib/presentation/auth/auth_wrapper.dart — LIVE VERSION
+// lib/presentation/auth/auth_wrapper.dart
+// Queens logo on splash screen — no hospital icon
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -52,17 +53,27 @@ class _SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // ── Queens Logo on splash ──
             Container(
-              width: 80,
-              height: 80,
+              width: 120,
+              height: 120,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Icon(
-                Icons.local_hospital_rounded,
                 color: Colors.white,
-                size: 44,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Image.asset(
+                  'assets/icons/logo.png',
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -75,7 +86,7 @@ class _SplashScreen extends StatelessWidget {
                 letterSpacing: -0.5,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             const Text(
               'Promising World-Class Care',
               style: TextStyle(

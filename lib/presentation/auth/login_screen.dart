@@ -1,4 +1,5 @@
-// lib/presentation/auth/login_screen.dart — LIVE VERSION
+// lib/presentation/auth/login_screen.dart
+// Queens logo ONLY — hospital icon completely removed
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -30,16 +31,12 @@ class _LoginScreenState extends State<LoginScreen>
       vsync: this,
     );
     _fadeAnim = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    );
+        parent: _animController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.15),
       end: Offset.zero,
     ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    ));
+        parent: _animController, curve: Curves.easeOut));
     _animController.forward();
   }
 
@@ -79,8 +76,49 @@ class _LoginScreenState extends State<LoginScreen>
                 children: [
                   const SizedBox(height: 60),
 
-                  // ── Logo / Brand ──
-                  _buildBrandHeader(),
+                  // ── Queens Logo ONLY ──
+                  Column(
+                    children: [
+                      // Your Queens logo — no hospital icon
+                      Image.asset(
+                        'assets/icons/logo.png',
+                        width: 130,
+                        height: 130,
+                        fit: BoxFit.contain,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Queens Connect',
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accentTeal.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: AppTheme.accentTeal
+                                  .withValues(alpha: 0.3)),
+                        ),
+                        child: const Text(
+                          'Promising World-Class Care',
+                          style: TextStyle(
+                            color: AppTheme.accentTeal,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
                   const SizedBox(height: 48),
 
                   // ── Form Card ──
@@ -103,22 +141,16 @@ class _LoginScreenState extends State<LoginScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Text(
-                            'Welcome Back',
-                            style: TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          const Text('Welcome Back',
+                              style: TextStyle(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700)),
                           const SizedBox(height: 4),
-                          const Text(
-                            'Sign in to continue',
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 14,
-                            ),
-                          ),
+                          const Text('Sign in to continue',
+                              style: TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 14)),
                           const SizedBox(height: 28),
 
                           // Email
@@ -151,7 +183,8 @@ class _LoginScreenState extends State<LoginScreen>
                             onFieldSubmitted: (_) => _handleLogin(),
                             decoration: InputDecoration(
                               labelText: 'Password',
-                              prefixIcon: const Icon(Icons.lock_outline),
+                              prefixIcon:
+                                  const Icon(Icons.lock_outline),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscurePassword
@@ -160,7 +193,8 @@ class _LoginScreenState extends State<LoginScreen>
                                   color: AppTheme.textSecondary,
                                 ),
                                 onPressed: () => setState(() =>
-                                    _obscurePassword = !_obscurePassword),
+                                    _obscurePassword =
+                                        !_obscurePassword),
                               ),
                             ),
                             validator: (v) {
@@ -168,31 +202,59 @@ class _LoginScreenState extends State<LoginScreen>
                                 return 'Password is required';
                               }
                               if (v.length < 6) {
-                                return 'Password must be at least 6 characters';
+                                return 'Minimum 6 characters';
                               }
                               return null;
                             },
                           ),
 
-                          // Error message
+                          // Error
                           if (authProvider.errorMessage != null)
-                            _buildErrorBanner(authProvider.errorMessage!),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEE2E2),
+                                  borderRadius:
+                                      BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: AppTheme.errorRed
+                                          .withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.error_outline,
+                                        color: AppTheme.errorRed,
+                                        size: 18),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        authProvider.errorMessage!,
+                                        style: const TextStyle(
+                                            color: AppTheme.errorRed,
+                                            fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
 
                           const SizedBox(height: 24),
 
-                          // Login button
                           SizedBox(
                             height: 52,
                             child: ElevatedButton(
-                              onPressed: isLoading ? null : _handleLogin,
+                              onPressed:
+                                  isLoading ? null : _handleLogin,
                               child: isLoading
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
                                       child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
+                                          color: Colors.white,
+                                          strokeWidth: 2),
                                     )
                                   : const Text('Sign In'),
                             ),
@@ -207,9 +269,7 @@ class _LoginScreenState extends State<LoginScreen>
                     child: Text(
                       'Contact your manager to get account access',
                       style: TextStyle(
-                        color: AppTheme.textTertiary,
-                        fontSize: 12,
-                      ),
+                          color: AppTheme.textTertiary, fontSize: 12),
                     ),
                   ),
                   const SizedBox(height: 40),
@@ -217,99 +277,6 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBrandHeader() {
-    return Column(
-      children: [
-        // ── Your Logo Here ──
-        // If you have a logo image, use this:
-         Image.asset('assets/icons/logo.png', width: 120, height: 120, fit: BoxFit.contain),
-
-        // Default icon (remove this when you add your logo above)
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppTheme.primaryBlue, AppTheme.accentTeal],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primaryBlue.withValues(alpha: 0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.local_hospital_rounded,
-            color: Colors.white,
-            size: 40,
-          ),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Queens Connect',
-          style: TextStyle(
-            color: AppTheme.textPrimary,
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-          decoration: BoxDecoration(
-            color: AppTheme.accentTeal.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-                color: AppTheme.accentTeal.withValues(alpha: 0.3)),
-          ),
-          child: const Text(
-            'Promising World-Class Care',
-            style: TextStyle(
-              color: AppTheme.accentTeal,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildErrorBanner(String message) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEE2E2),
-          borderRadius: BorderRadius.circular(10),
-          border:
-              Border.all(color: AppTheme.errorRed.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.error_outline,
-                color: AppTheme.errorRed, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                    color: AppTheme.errorRed, fontSize: 13),
-              ),
-            ),
-          ],
         ),
       ),
     );
