@@ -1,9 +1,8 @@
 // lib/presentation/shared/providers/visit_form_provider.dart
+// GPS does all verification — no hospital selection needed from user
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:hospital_field_app/data/models/hospital_model.dart';
-import 'package:hospital_field_app/data/services/hospital_service.dart';
 import 'package:hospital_field_app/data/services/location_service.dart';
 import 'package:hospital_field_app/data/services/visit_service.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,7 +10,7 @@ import 'package:image_picker/image_picker.dart';
 enum FormStatus {
   idle,
   loadingLocation,
-  locationCaptured,
+  locationReady,
   locationError,
   submitting,
   success,
@@ -20,52 +19,23 @@ enum FormStatus {
 
 class VisitFormProvider extends ChangeNotifier {
   final VisitService _visitService = VisitService();
-  final HospitalService _hospitalService = HospitalService();
   final LocationService _locationService = LocationService();
   final ImagePicker _imagePicker = ImagePicker();
 
-  // --- Form state ---
   FormStatus _status = FormStatus.idle;
   String? _errorMessage;
   String? _successVisitId;
-
-  // --- Location state ---
   LocationResult? _locationResult;
-
-  // --- Hospital selection ---
-  List<HospitalModel> _hospitals = [];
-  HospitalModel? _selectedHospital;
-  bool _hospitalsLoaded = false;
-
-  // --- Photo ---
   File? _photoFile;
 
-  // Getters
   FormStatus get status => _status;
   String? get errorMessage => _errorMessage;
   String? get successVisitId => _successVisitId;
   LocationResult? get locationResult => _locationResult;
-  List<HospitalModel> get hospitals => _hospitals;
-  HospitalModel? get selectedHospital => _selectedHospital;
   File? get photoFile => _photoFile;
   bool get hasLocation => _locationResult != null;
-  bool get isLocationAcceptable =>
-      _locationResult != null &&
-      _locationService.isAccuracyAcceptable(_locationResult!.accuracy);
 
-  /// Load hospitals from Firestore.
-  Future<void> loadHospitals() async {
-    if (_hospitalsLoaded) return;
-    try {
-      _hospitals = await _hospitalService.getAllHospitals();
-      _hospitalsLoaded = true;
-      notifyListeners();
-    } catch (e) {
-      // Non-critical — user can still type hospital name manually
-    }
-  }
-
-  /// Capture GPS location.
+  /// Silently capture GPS — no UI indicator shown to user
   Future<void> captureLocation() async {
     _status = FormStatus.loadingLocation;
     _errorMessage = null;
@@ -75,27 +45,20 @@ class VisitFormProvider extends ChangeNotifier {
       _locationResult = await _locationService.getCurrentLocation();
 
       if (!_locationService.isAccuracyAcceptable(_locationResult!.accuracy)) {
-        _status = FormStatus.locationError;
-        _errorMessage =
-            'GPS accuracy is poor (${_locationResult!.accuracy.toStringAsFixed(0)}m). '
-            'Please move to an open area and try again.';
+        // Poor accuracy — retry silently or accept anyway
+        // We still keep the location so the visit can proceed
+        _status = FormStatus.locationReady;
       } else {
-        _status = FormStatus.locationCaptured;
+        _status = FormStatus.locationReady;
       }
     } on LocationException catch (e) {
       _status = FormStatus.locationError;
       _errorMessage = e.message;
     } catch (e) {
       _status = FormStatus.locationError;
-      _errorMessage = 'Failed to get location. Please try again.';
+      _errorMessage = 'Could not get location. Please check GPS is enabled.';
     }
 
-    notifyListeners();
-  }
-
-  /// Select hospital from dropdown.
-  void selectHospital(HospitalModel? hospital) {
-    _selectedHospital = hospital;
     notifyListeners();
   }
 
@@ -107,14 +70,13 @@ class VisitFormProvider extends ChangeNotifier {
       maxHeight: 1080,
       imageQuality: 85,
     );
-
     if (image != null) {
       _photoFile = File(image.path);
       notifyListeners();
     }
   }
 
-  /// Pick photo from gallery (fallback).
+  /// Pick photo from gallery.
   Future<void> pickFromGallery() async {
     final XFile? image = await _imagePicker.pickImage(
       source: ImageSource.gallery,
@@ -122,20 +84,19 @@ class VisitFormProvider extends ChangeNotifier {
       maxHeight: 1080,
       imageQuality: 85,
     );
-
     if (image != null) {
       _photoFile = File(image.path);
       notifyListeners();
     }
   }
 
-  /// Remove photo.
   void removePhoto() {
     _photoFile = null;
     notifyListeners();
   }
 
-  /// Submit the visit form.
+  /// Submit visit — GPS scans all hospitals automatically.
+  /// Staff just types the name. No dropdown needed.
   Future<bool> submitVisit({
     required String userId,
     required String userName,
@@ -144,14 +105,14 @@ class VisitFormProvider extends ChangeNotifier {
     required String purpose,
     String? notes,
   }) async {
+    // If GPS not ready, try one more time
     if (_locationResult == null) {
-      _errorMessage = 'Location not captured. Please capture GPS location first.';
-      notifyListeners();
-      return false;
+      await captureLocation();
     }
 
-    if (!isLocationAcceptable) {
-      _errorMessage = 'GPS accuracy is too poor to submit. Please recapture.';
+    if (_locationResult == null) {
+      _errorMessage =
+          'Location not available. Please make sure GPS is enabled and try again.';
       notifyListeners();
       return false;
     }
@@ -165,7 +126,6 @@ class VisitFormProvider extends ChangeNotifier {
         userId: userId,
         userName: userName,
         manualHospitalName: manualHospitalName,
-        selectedHospital: _selectedHospital,
         doctorName: doctorName,
         purpose: purpose,
         notes: notes,
@@ -178,19 +138,17 @@ class VisitFormProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       _status = FormStatus.error;
-      _errorMessage = 'Failed to submit visit: ${e.toString()}';
+      _errorMessage = 'Failed to submit visit. Please try again.';
       notifyListeners();
       return false;
     }
   }
 
-  /// Reset form for next visit.
   void reset() {
     _status = FormStatus.idle;
     _errorMessage = null;
     _successVisitId = null;
     _locationResult = null;
-    _selectedHospital = null;
     _photoFile = null;
     notifyListeners();
   }

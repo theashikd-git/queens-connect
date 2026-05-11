@@ -1,32 +1,35 @@
 // lib/data/models/visit_model.dart
+// Added nearestHospitalName — the closest hospital found by GPS scan
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class VisitModel {
   final String id;
   final String userId;
-  final String userName; // Denormalized for quick display
-  final String manualHospitalName; // What user claimed
-  final String? hospitalId; // Reference to hospitals collection
-  final double? hospitalLatitude; // Hospital's stored coordinates
+  final String userName;
+  final String manualHospitalName;   // What staff TYPED
+  final String? nearestHospitalName; // Closest hospital found by GPS scan
+  final String? hospitalId;
+  final double? hospitalLatitude;
   final double? hospitalLongitude;
   final String doctorName;
   final String purpose;
   final String? notes;
-  final double gpsLatitude; // Actual GPS location
+  final double gpsLatitude;
   final double gpsLongitude;
-  final double gpsAccuracy; // In meters
+  final double gpsAccuracy;
   final DateTime timestamp;
   final String? photoUrl;
-  final double? distanceFromHospital; // Calculated distance in meters
-  final String status; // valid / warning / suspicious
-  final bool isMockGps; // Mock GPS detection flag
+  final double? distanceFromHospital;
+  final String status;
+  final bool isMockGps;
 
   const VisitModel({
     required this.id,
     required this.userId,
     required this.userName,
     required this.manualHospitalName,
+    this.nearestHospitalName,
     this.hospitalId,
     this.hospitalLatitude,
     this.hospitalLongitude,
@@ -50,6 +53,7 @@ class VisitModel {
       userId: data['user_id'] ?? '',
       userName: data['user_name'] ?? '',
       manualHospitalName: data['manual_hospital_name'] ?? '',
+      nearestHospitalName: data['nearest_hospital_name'],
       hospitalId: data['hospital_id'],
       hospitalLatitude: (data['hospital_latitude'] as num?)?.toDouble(),
       hospitalLongitude: (data['hospital_longitude'] as num?)?.toDouble(),
@@ -61,8 +65,7 @@ class VisitModel {
       gpsAccuracy: (data['gps_accuracy'] as num?)?.toDouble() ?? 0.0,
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
       photoUrl: data['photo_url'],
-      distanceFromHospital:
-          (data['distance_from_hospital'] as num?)?.toDouble(),
+      distanceFromHospital: (data['distance_from_hospital'] as num?)?.toDouble(),
       status: data['status'] ?? 'suspicious',
       isMockGps: data['is_mock_gps'] ?? false,
     );
@@ -72,6 +75,8 @@ class VisitModel {
         'user_id': userId,
         'user_name': userName,
         'manual_hospital_name': manualHospitalName,
+        if (nearestHospitalName != null)
+          'nearest_hospital_name': nearestHospitalName,
         if (hospitalId != null) 'hospital_id': hospitalId,
         if (hospitalLatitude != null) 'hospital_latitude': hospitalLatitude,
         if (hospitalLongitude != null) 'hospital_longitude': hospitalLongitude,
@@ -88,35 +93,4 @@ class VisitModel {
         'status': status,
         'is_mock_gps': isMockGps,
       };
-
-  /// Copy with updated fields
-  VisitModel copyWith({
-    String? photoUrl,
-    double? distanceFromHospital,
-    String? status,
-    double? hospitalLatitude,
-    double? hospitalLongitude,
-    String? hospitalId,
-  }) {
-    return VisitModel(
-      id: id,
-      userId: userId,
-      userName: userName,
-      manualHospitalName: manualHospitalName,
-      hospitalId: hospitalId ?? this.hospitalId,
-      hospitalLatitude: hospitalLatitude ?? this.hospitalLatitude,
-      hospitalLongitude: hospitalLongitude ?? this.hospitalLongitude,
-      doctorName: doctorName,
-      purpose: purpose,
-      notes: notes,
-      gpsLatitude: gpsLatitude,
-      gpsLongitude: gpsLongitude,
-      gpsAccuracy: gpsAccuracy,
-      timestamp: timestamp,
-      photoUrl: photoUrl ?? this.photoUrl,
-      distanceFromHospital: distanceFromHospital ?? this.distanceFromHospital,
-      status: status ?? this.status,
-      isMockGps: isMockGps,
-    );
-  }
 }

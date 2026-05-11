@@ -1,4 +1,6 @@
 // lib/data/services/visit_service.dart
+// SMART VERIFICATION: Scans all hospitals within GPS range
+// Staff types any name freely — GPS location determines the real status
 
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,17 +20,75 @@ class VisitService {
   CollectionReference<Map<String, dynamic>> get _collection =>
       _firestore.collection(AppConstants.visitsCollection);
 
+  CollectionReference<Map<String, dynamic>> get _hospitals =>
+      _firestore.collection(AppConstants.hospitalsCollection);
+
+  // ─────────────────────────────────────────
+  //  SMART LOCATION VERIFICATION
+  // ─────────────────────────────────────────
+
+  /// Scans ALL hospitals in Firestore and finds the closest one
+  /// to the staff member's actual GPS location.
+  /// Returns the closest hospital and distance — regardless of what name was typed.
+  Future<_NearbyResult> _findNearestHospital(
+    double gpsLat,
+    double gpsLng,
+  ) async {
+    // Load all hospitals from Firestore
+    final snapshot = await _hospitals.get();
+
+    if (snapshot.docs.isEmpty) {
+      // No hospitals in database — cannot verify
+      return _NearbyResult(
+        nearestHospital: null,
+        distanceMeters: null,
+        status: AppConstants.statusSuspicious,
+      );
+    }
+
+    HospitalModel? nearestHospital;
+    double? shortestDistance;
+
+    // Calculate distance to every hospital in the database
+    for (final doc in snapshot.docs) {
+      final hospital = HospitalModel.fromFirestore(doc);
+
+      final distance = DistanceUtils.calculateDistance(
+        gpsLat,
+        gpsLng,
+        hospital.latitude,
+        hospital.longitude,
+      );
+
+      // Keep track of the closest one
+      if (shortestDistance == null || distance < shortestDistance) {
+        shortestDistance = distance;
+        nearestHospital = hospital;
+      }
+    }
+
+    // Determine status based on distance to nearest hospital
+    final status = shortestDistance != null
+        ? DistanceUtils.getVisitStatus(shortestDistance)
+        : AppConstants.statusSuspicious;
+
+    return _NearbyResult(
+      nearestHospital: nearestHospital,
+      distanceMeters: shortestDistance,
+      status: status,
+    );
+  }
+
   // ─────────────────────────────────────────
   //  CREATE
   // ─────────────────────────────────────────
 
   /// Submit a new visit.
-  /// Handles: photo upload, distance calculation, status determination.
+  /// Automatically finds nearest hospital and calculates real distance.
   Future<String> submitVisit({
     required String userId,
     required String userName,
     required String manualHospitalName,
-    required HospitalModel? selectedHospital,
     required String doctorName,
     required String purpose,
     String? notes,
@@ -43,32 +103,23 @@ class VisitService {
       photoUrl = await _uploadPhoto(photoFile, visitId, userId);
     }
 
-    // 2. Calculate distance if hospital coordinates exist
-    double? distanceMeters;
-    String status = AppConstants.statusSuspicious;
+    // 2. Find nearest hospital from Firestore by GPS scan
+    final nearbyResult = await _findNearestHospital(
+      locationResult.latitude,
+      locationResult.longitude,
+    );
 
-    if (selectedHospital != null) {
-      distanceMeters = DistanceUtils.calculateDistance(
-        locationResult.latitude,
-        locationResult.longitude,
-        selectedHospital.latitude,
-        selectedHospital.longitude,
-      );
-      status = DistanceUtils.getVisitStatus(distanceMeters);
-    } else {
-      // No hospital coordinates → suspicious by default
-      status = AppConstants.statusSuspicious;
-    }
-
-    // 3. Build visit model
+    // 3. Build visit model with all verification data
     final visit = VisitModel(
       id: visitId,
       userId: userId,
       userName: userName,
       manualHospitalName: manualHospitalName,
-      hospitalId: selectedHospital?.id,
-      hospitalLatitude: selectedHospital?.latitude,
-      hospitalLongitude: selectedHospital?.longitude,
+      // Store the nearest hospital found by GPS — not what staff typed
+      hospitalId: nearbyResult.nearestHospital?.id,
+      hospitalLatitude: nearbyResult.nearestHospital?.latitude,
+      hospitalLongitude: nearbyResult.nearestHospital?.longitude,
+      nearestHospitalName: nearbyResult.nearestHospital?.name,
       doctorName: doctorName,
       purpose: purpose,
       notes: notes,
@@ -77,8 +128,8 @@ class VisitService {
       gpsAccuracy: locationResult.accuracy,
       timestamp: DateTime.now(),
       photoUrl: photoUrl,
-      distanceFromHospital: distanceMeters,
-      status: status,
+      distanceFromHospital: nearbyResult.distanceMeters,
+      status: nearbyResult.status,
       isMockGps: locationResult.isMockLocation,
     );
 
@@ -92,7 +143,6 @@ class VisitService {
   //  READ
   // ─────────────────────────────────────────
 
-  /// Stream of all visits for manager dashboard (ordered by timestamp desc).
   Stream<List<VisitModel>> streamAllVisits() {
     return _collection
         .orderBy('timestamp', descending: true)
@@ -101,7 +151,6 @@ class VisitService {
             snap.docs.map((doc) => VisitModel.fromFirestore(doc)).toList());
   }
 
-  /// Stream of visits by a specific user.
   Stream<List<VisitModel>> streamUserVisits(String userId) {
     return _collection
         .where('user_id', isEqualTo: userId)
@@ -111,18 +160,15 @@ class VisitService {
             snap.docs.map((doc) => VisitModel.fromFirestore(doc)).toList());
   }
 
-  /// Get single visit by ID.
   Future<VisitModel?> getVisitById(String visitId) async {
     final doc = await _collection.doc(visitId).get();
     if (!doc.exists) return null;
     return VisitModel.fromFirestore(doc);
   }
 
-  /// Get visit statistics for manager dashboard.
   Future<Map<String, int>> getVisitStats() async {
     final snap = await _collection.get();
     final visits = snap.docs.map((d) => VisitModel.fromFirestore(d)).toList();
-
     return {
       'total': visits.length,
       'valid': visits.where((v) => v.status == 'valid').length,
@@ -131,7 +177,6 @@ class VisitService {
     };
   }
 
-  /// Filter visits by status.
   Stream<List<VisitModel>> streamVisitsByStatus(String status) {
     return _collection
         .where('status', isEqualTo: status)
@@ -161,7 +206,22 @@ class VisitService {
       photoFile,
       SettableMetadata(contentType: 'image/jpeg'),
     );
-
     return await uploadTask.ref.getDownloadURL();
   }
+}
+
+// ─────────────────────────────────────────
+//  HELPER CLASS
+// ─────────────────────────────────────────
+
+class _NearbyResult {
+  final HospitalModel? nearestHospital;
+  final double? distanceMeters;
+  final String status;
+
+  const _NearbyResult({
+    required this.nearestHospital,
+    required this.distanceMeters,
+    required this.status,
+  });
 }
