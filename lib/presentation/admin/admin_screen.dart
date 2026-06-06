@@ -38,6 +38,7 @@ class _AdminScreenState extends State<AdminScreen> {
   final _emailCtrl      = TextEditingController();
   final _passwordCtrl   = TextEditingController();
   bool _obscureCreate   = true;
+  String _selectedRole  = 'user';
 
   // ── Staff list ──
   List<Map<String, dynamic>> _staffList = [];
@@ -88,7 +89,6 @@ class _AdminScreenState extends State<AdminScreen> {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('users')
-          .where('role', isEqualTo: 'user')
           .orderBy('name')
           .get();
 
@@ -127,13 +127,16 @@ class _AdminScreenState extends State<AdminScreen> {
       final uid = credential.user!.uid;
 
       // 2. Save their profile to Firestore users collection
+      final createdName = _nameCtrl.text.trim();
+      final createdRole = _selectedRole;
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .set({
-        'name'       : _nameCtrl.text.trim(),
+        'name'       : createdName,
         'email'      : _emailCtrl.text.trim(),
-        'role'       : 'user',
+        'role'       : createdRole,
         'created_at' : FieldValue.serverTimestamp(),
       });
 
@@ -141,11 +144,12 @@ class _AdminScreenState extends State<AdminScreen> {
       _nameCtrl.clear();
       _emailCtrl.clear();
       _passwordCtrl.clear();
+      setState(() => _selectedRole = 'user');
 
       setState(() {
         _isCreating    = false;
         _createSuccess =
-            '✅ Staff member "${_nameCtrl.text.trim().isEmpty ? "User" : ""}" created successfully!';
+            '✅ ${createdRole == 'manager' ? 'Manager' : 'Staff'} "$createdName" created successfully!';
       });
 
       // Reload staff list
@@ -440,23 +444,32 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.admin_panel_settings_rounded,
+                const Icon(Icons.admin_panel_settings_rounded,
                     color: Colors.white, size: 28),
-                SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Admin Panel',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700)),
-                    Text('Create and manage field staff accounts',
-                        style:
-                            TextStyle(color: Colors.white70, fontSize: 12)),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Admin Panel',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 2),
+                      const Text('Create and manage field staff accounts',
+                          style:
+                              TextStyle(color: Colors.white70, fontSize: 12)),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${_staffList.length} account(s) loaded',
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -511,6 +524,25 @@ class _AdminScreenState extends State<AdminScreen> {
                       if (v == null || v.isEmpty) return 'Email is required';
                       if (!v.contains('@')) return 'Enter a valid email';
                       return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Role
+                  DropdownButtonFormField<String>(
+                    value: _selectedRole,
+                    decoration: const InputDecoration(
+                      labelText: 'Role',
+                      prefixIcon: Icon(Icons.work_outline),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'user', child: Text('Field Staff')),
+                      DropdownMenuItem(value: 'manager', child: Text('Manager')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _selectedRole = value);
+                      }
                     },
                   ),
                   const SizedBox(height: 14),
@@ -656,6 +688,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       final staff = _staffList[index];
                       final name  = staff['name'] ?? '';
                       final email = staff['email'] ?? '';
+                      final role  = staff['role'] ?? 'user';
                       final uid   = staff['id'] ?? '';
 
                       return ListTile(
@@ -678,7 +711,7 @@ class _AdminScreenState extends State<AdminScreen> {
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                                 color: AppTheme.textPrimary)),
-                        subtitle: Text(email,
+                        subtitle: Text('$email • ${role == 'manager' ? 'Manager' : 'Field Staff'}',
                             style: const TextStyle(
                                 color: AppTheme.textSecondary,
                                 fontSize: 12)),

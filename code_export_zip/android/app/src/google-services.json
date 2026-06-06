@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "606334525058",
+    "project_id": "queens-connect-1ab54",
+    "storage_bucket": "queens-connect-1ab54.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:606334525058:android:256ed2dbfc43d50950de9b",
+        "android_client_info": {
+          "package_name": "com.example.hospital_field_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDtWRnQQGHh98mTl35b8Esad8F3C0cBNjE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:hospital_field_app/core/theme/app_theme.dart';
+import 'package:hospital_field_app/presentation/admin/admin_screen.dart';
 import 'package:hospital_field_app/presentation/shared/providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -270,6 +271,20 @@ class _LoginScreenState extends State<LoginScreen>
                       'Contact your manager to get account access',
                       style: TextStyle(
                           color: AppTheme.textTertiary, fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AdminScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text('Admin login'),
                     ),
                   ),
                   const SizedBox(height: 40),
