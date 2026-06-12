@@ -1,9 +1,13 @@
 // lib/presentation/shared/providers/visit_form_provider.dart
-// GPS does all verification — no hospital selection needed from user
+// Hospital search/select + free-text fallback (geocoded on submit),
+// silent GPS capture, photo, and follow-up reminder scheduling.
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:hospital_field_app/data/models/hospital_model.dart';
+import 'package:hospital_field_app/data/services/hospital_service.dart';
 import 'package:hospital_field_app/data/services/location_service.dart';
+import 'package:hospital_field_app/data/services/notification_service.dart';
 import 'package:hospital_field_app/data/services/visit_service.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -20,6 +24,7 @@ enum FormStatus {
 class VisitFormProvider extends ChangeNotifier {
   final VisitService _visitService = VisitService();
   final LocationService _locationService = LocationService();
+  final HospitalService _hospitalService = HospitalService();
   final ImagePicker _imagePicker = ImagePicker();
 
   FormStatus _status = FormStatus.idle;
@@ -28,6 +33,15 @@ class VisitFormProvider extends ChangeNotifier {
   LocationResult? _locationResult;
   File? _photoFile;
 
+  // -- Hospital search/selection --
+  List<HospitalModel> _allHospitals = [];
+  List<HospitalModel> _searchResults = [];
+  HospitalModel? _selectedHospital;
+  bool _loadingHospitals = false;
+
+  // -- Follow-up reminder --
+  DateTime? _followUpDate;
+
   FormStatus get status => _status;
   String? get errorMessage => _errorMessage;
   String? get successVisitId => _successVisitId;
@@ -35,7 +49,70 @@ class VisitFormProvider extends ChangeNotifier {
   File? get photoFile => _photoFile;
   bool get hasLocation => _locationResult != null;
 
-  /// Silently capture GPS — no UI indicator shown to user
+  List<HospitalModel> get searchResults => _searchResults;
+  HospitalModel? get selectedHospital => _selectedHospital;
+  bool get loadingHospitals => _loadingHospitals;
+
+  DateTime? get followUpDate => _followUpDate;
+
+  // -----------------------------------------
+  //  HOSPITAL SEARCH
+  // -----------------------------------------
+
+  Future<void> loadHospitals() async {
+    if (_allHospitals.isNotEmpty) return;
+    _loadingHospitals = true;
+    notifyListeners();
+    try {
+      _allHospitals = await _hospitalService.getAllHospitals();
+    } catch (_) {
+      _allHospitals = [];
+    }
+    _loadingHospitals = false;
+    notifyListeners();
+  }
+
+  void searchHospitals(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) {
+      _searchResults = [];
+    } else {
+      _searchResults = _allHospitals
+          .where((h) =>
+              h.name.toLowerCase().contains(q) ||
+              (h.city?.toLowerCase().contains(q) ?? false) ||
+              (h.address?.toLowerCase().contains(q) ?? false))
+          .take(25)
+          .toList();
+    }
+    notifyListeners();
+  }
+
+  void selectHospital(HospitalModel hospital) {
+    _selectedHospital = hospital;
+    _searchResults = [];
+    notifyListeners();
+  }
+
+  void clearSelectedHospital() {
+    _selectedHospital = null;
+    _searchResults = [];
+    notifyListeners();
+  }
+
+  // -----------------------------------------
+  //  FOLLOW-UP
+  // -----------------------------------------
+
+  void setFollowUp(DateTime? dateTime) {
+    _followUpDate = dateTime;
+    notifyListeners();
+  }
+
+  // -----------------------------------------
+  //  LOCATION
+  // -----------------------------------------
+
   Future<void> captureLocation() async {
     _status = FormStatus.loadingLocation;
     _errorMessage = null;
@@ -43,14 +120,7 @@ class VisitFormProvider extends ChangeNotifier {
 
     try {
       _locationResult = await _locationService.getCurrentLocation();
-
-      if (!_locationService.isAccuracyAcceptable(_locationResult!.accuracy)) {
-        // Poor accuracy — retry silently or accept anyway
-        // We still keep the location so the visit can proceed
-        _status = FormStatus.locationReady;
-      } else {
-        _status = FormStatus.locationReady;
-      }
+      _status = FormStatus.locationReady;
     } on LocationException catch (e) {
       _status = FormStatus.locationError;
       _errorMessage = e.message;
@@ -58,11 +128,13 @@ class VisitFormProvider extends ChangeNotifier {
       _status = FormStatus.locationError;
       _errorMessage = 'Could not get location. Please check GPS is enabled.';
     }
-
     notifyListeners();
   }
 
-  /// Pick photo from camera.
+  // -----------------------------------------
+  //  PHOTO
+  // -----------------------------------------
+
   Future<void> pickPhoto() async {
     final XFile? image = await _imagePicker.pickImage(
       source: ImageSource.camera,
@@ -76,7 +148,6 @@ class VisitFormProvider extends ChangeNotifier {
     }
   }
 
-  /// Pick photo from gallery.
   Future<void> pickFromGallery() async {
     final XFile? image = await _imagePicker.pickImage(
       source: ImageSource.gallery,
@@ -95,8 +166,10 @@ class VisitFormProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Submit visit — GPS scans all hospitals automatically.
-  /// Staff just types the name. No dropdown needed.
+  // -----------------------------------------
+  //  SUBMIT
+  // -----------------------------------------
+
   Future<bool> submitVisit({
     required String userId,
     required String userName,
@@ -104,15 +177,24 @@ class VisitFormProvider extends ChangeNotifier {
     required String doctorName,
     required String purpose,
     String? notes,
+    String? followUpNote,
   }) async {
-    // If GPS not ready, try one more time
-    if (_locationResult == null) {
-      await captureLocation();
+    // Need either a selected hospital OR a typed name.
+    final typed = manualHospitalName.trim();
+    if (_selectedHospital == null && typed.isEmpty) {
+      _errorMessage = 'Please search and select, or type, the hospital name.';
+      _status = FormStatus.error;
+      notifyListeners();
+      return false;
     }
 
     if (_locationResult == null) {
+      await captureLocation();
+    }
+    if (_locationResult == null) {
       _errorMessage =
           'Location not available. Please make sure GPS is enabled and try again.';
+      _status = FormStatus.error;
       notifyListeners();
       return false;
     }
@@ -122,16 +204,33 @@ class VisitFormProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _successVisitId = await _visitService.submitVisit(
+      final visitId = await _visitService.submitVisit(
         userId: userId,
         userName: userName,
-        manualHospitalName: manualHospitalName,
+        selectedHospital: _selectedHospital,
+        typedHospitalName:
+            _selectedHospital?.name ?? typed,
         doctorName: doctorName,
         purpose: purpose,
         notes: notes,
         locationResult: _locationResult!,
         photoFile: _photoFile,
+        followUpDate: _followUpDate,
+        followUpNote: followUpNote,
       );
+      _successVisitId = visitId;
+
+      // Schedule the on-device reminder (best-effort).
+      if (_followUpDate != null) {
+        final hospitalName = _selectedHospital?.name ?? typed;
+        await NotificationService.scheduleFollowUp(
+          visitId: visitId,
+          when: _followUpDate!,
+          hospitalName: hospitalName,
+          doctorName: doctorName,
+          note: followUpNote,
+        );
+      }
 
       _status = FormStatus.success;
       notifyListeners();
@@ -150,6 +249,9 @@ class VisitFormProvider extends ChangeNotifier {
     _successVisitId = null;
     _locationResult = null;
     _photoFile = null;
+    _selectedHospital = null;
+    _searchResults = [];
+    _followUpDate = null;
     notifyListeners();
   }
 }

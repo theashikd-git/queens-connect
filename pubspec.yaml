@@ -46,6 +46,12 @@ dependencies:
   path: ^1.9.0
   geocoding: ^4.0.0
 
+  # --- ADDED for free map lookup + on-device reminders ---
+  http: ^1.2.2                        # free Nominatim geocoding calls
+  flutter_local_notifications: ^17.2.4 # on-device follow-up reminders
+  timezone: ^0.9.4                    # correct local time for scheduling
+  flutter_timezone: ^3.0.1            # read the device's timezone
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

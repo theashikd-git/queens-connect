@@ -19,6 +19,7 @@ class AppTheme {
   static const Color warningAmber = Color(0xFFF59E0B);
   static const Color successGreen = Color(0xFF16A34A);
   static const Color suspiciousRed = Color(0xFFDC2626);
+  static const Color unrecognizedPurple = Color(0xFF7C3AED); // needs review
 
   // --- Status Colors ---
   static Color statusColor(String status) {
@@ -29,6 +30,8 @@ class AppTheme {
         return warningAmber;
       case 'suspicious':
         return suspiciousRed;
+      case 'unrecognized':
+        return unrecognizedPurple;
       default:
         return textSecondary;
     }
@@ -42,6 +45,8 @@ class AppTheme {
         return const Color(0xFFFEF3C7);
       case 'suspicious':
         return const Color(0xFFFEE2E2);
+      case 'unrecognized':
+        return const Color(0xFFEDE9FE);
       default:
         return const Color(0xFFF1F5F9);
     }
@@ -55,8 +60,26 @@ class AppTheme {
         return Icons.warning_amber_rounded;
       case 'suspicious':
         return Icons.gpp_bad_rounded;
+      case 'unrecognized':
+        return Icons.help_outline_rounded;
       default:
         return Icons.help_outline_rounded;
+    }
+  }
+
+  /// Human-readable label for a status.
+  static String statusLabel(String status) {
+    switch (status) {
+      case 'valid':
+        return 'Valid';
+      case 'warning':
+        return 'Warning';
+      case 'suspicious':
+        return 'Suspicious';
+      case 'unrecognized':
+        return 'Unrecognized';
+      default:
+        return status;
     }
   }
 
@@ -73,7 +96,6 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: surfaceWhite,
       fontFamily: 'Roboto',
-
       appBarTheme: const AppBarTheme(
         backgroundColor: cardWhite,
         foregroundColor: textPrimary,
@@ -88,9 +110,6 @@ class AppTheme {
           letterSpacing: -0.3,
         ),
       ),
-
-      // ✅ FIXED: CardThemeData with no border in shape
-      //    Border is handled per-widget to avoid const issues
       cardTheme: CardThemeData(
         color: cardWhite,
         elevation: 0,
@@ -99,7 +118,6 @@ class AppTheme {
           borderRadius: BorderRadius.circular(16),
         ),
       ),
-
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBlue,
@@ -116,7 +134,6 @@ class AppTheme {
           ),
         ),
       ),
-
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: primaryBlue,
@@ -127,7 +144,6 @@ class AppTheme {
           ),
         ),
       ),
-
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surfaceWhite,
@@ -152,19 +168,16 @@ class AppTheme {
         labelStyle: const TextStyle(color: textSecondary, fontSize: 14),
         hintStyle: const TextStyle(color: textTertiary, fontSize: 14),
       ),
-
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-
       dividerTheme: const DividerThemeData(
         color: dividerColor,
         thickness: 1,
         space: 1,
       ),
-
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: cardWhite,
         selectedItemColor: primaryBlue,
