@@ -159,29 +159,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                         color: AppTheme.primaryBlue));
               }
               if (snapshot.hasError) {
-                return Center(
-                    child: Text('Error: ${snapshot.error}',
-                        style: const TextStyle(color: AppTheme.errorRed)));
+                return _buildErrorState();
               }
               final visits = snapshot.data ?? [];
               if (visits.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.assignment_outlined,
-                          size: 64,
-                          color:
-                              AppTheme.textTertiary.withValues(alpha: 0.5)),
-                      const SizedBox(height: 16),
-                      const Text('No visits found',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 18,
-                              color: AppTheme.textPrimary)),
-                    ],
-                  ),
-                );
+                return _buildEmptyState();
               }
               return ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -193,6 +175,139 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
           ),
         ),
       ],
+    );
+  }
+
+  // -----------------------------------------
+  //  EMPTY / ERROR STATES
+  // -----------------------------------------
+
+  /// Friendly "nothing here" message, worded per filter.
+  Widget _buildEmptyState() {
+    late final IconData icon;
+    late final String title;
+    late final String message;
+
+    switch (_selectedFilter) {
+      case 'unrecognized':
+        icon = Icons.help_outline_rounded;
+        title = 'Nothing to review';
+        message = 'All visits have been verified automatically.\n'
+            'Visits needing your review will appear here.';
+        break;
+      case 'valid':
+        icon = Icons.check_circle_outline_rounded;
+        title = 'No valid visits yet';
+        message = 'Visits logged within 100m of the hospital\n'
+            'will show up here.';
+        break;
+      case 'warning':
+        icon = Icons.warning_amber_rounded;
+        title = 'No warnings';
+        message = 'Nothing flagged for being slightly off location.\n'
+            'That is a good sign.';
+        break;
+      case 'suspicious':
+        icon = Icons.gpp_good_rounded;
+        title = 'No suspicious visits';
+        message = 'No location mismatches detected.\n'
+            'Everything looks clean.';
+        break;
+      default:
+        icon = Icons.assignment_outlined;
+        title = 'No visits yet';
+        message = 'Once your team starts logging visits,\n'
+            'they will appear here.';
+    }
+
+    final color = _selectedFilter == 'all'
+        ? AppTheme.textTertiary
+        : AppTheme.statusColor(_selectedFilter);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 44, color: color),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Friendly error state — never dumps the raw Firestore exception at the user.
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppTheme.errorRed.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.cloud_off_rounded,
+                  size: 44, color: AppTheme.errorRed),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Could not load visits',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Please check your internet connection\nand try again.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: () => setState(() {}),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
