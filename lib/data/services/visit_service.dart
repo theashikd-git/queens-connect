@@ -224,13 +224,19 @@ class VisitService {
             snap.docs.map((doc) => VisitModel.fromFirestore(doc)).toList());
   }
 
+  /// A single staff member's visits.
+  /// Same reason as above — no .orderBy() so Firestore doesn't demand a
+  /// composite index. Sorted in Dart instead.
   Stream<List<VisitModel>> streamUserVisits(String userId) {
     return _collection
         .where('user_id', isEqualTo: userId)
-        .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snap) =>
-            snap.docs.map((doc) => VisitModel.fromFirestore(doc)).toList());
+        .map((snap) {
+      final visits =
+          snap.docs.map((doc) => VisitModel.fromFirestore(doc)).toList();
+      visits.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return visits;
+    });
   }
 
   Future<VisitModel?> getVisitById(String visitId) async {
@@ -252,13 +258,21 @@ class VisitService {
     };
   }
 
+  /// Visits with a given status.
+  ///
+  /// NOTE: we deliberately do NOT call .orderBy('timestamp') here.
+  /// Combining where(status) + orderBy(timestamp) would require a Firestore
+  /// COMPOSITE INDEX. Sorting in Dart instead keeps it index-free.
   Stream<List<VisitModel>> streamVisitsByStatus(String status) {
     return _collection
         .where('status', isEqualTo: status)
-        .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snap) =>
-            snap.docs.map((doc) => VisitModel.fromFirestore(doc)).toList());
+        .map((snap) {
+      final visits =
+          snap.docs.map((doc) => VisitModel.fromFirestore(doc)).toList();
+      visits.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return visits;
+    });
   }
 
   /// All visits inside a date range (for the manager report).
