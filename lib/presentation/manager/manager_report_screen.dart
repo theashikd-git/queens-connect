@@ -135,23 +135,25 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
                           color: AppTheme.primaryBlue));
                 }
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text('Error: ${snapshot.error}',
-                          textAlign: TextAlign.center,
-                          style:
-                              const TextStyle(color: AppTheme.errorRed)),
-                    ),
+                  return _messageState(
+                    icon: Icons.cloud_off_rounded,
+                    color: AppTheme.errorRed,
+                    title: 'Could not load the report',
+                    message:
+                        'Please check your internet connection\nand try again.',
+                    onRetry: _refresh,
                   );
                 }
                 final visits = snapshot.data ?? [];
                 final reports = _aggregate(visits);
                 if (reports.isEmpty) {
-                  return const Center(
-                    child: Text('No visits in this period.',
-                        style: TextStyle(
-                            color: AppTheme.textSecondary, fontSize: 14)),
+                  return _messageState(
+                    icon: Icons.event_busy_rounded,
+                    color: AppTheme.textTertiary,
+                    title: 'No visits in this period',
+                    message:
+                        'No one logged a visit in the selected dates.\n'
+                        'Try a wider date range.',
                   );
                 }
                 return ListView(
@@ -172,6 +174,61 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Shared friendly empty/error state.
+  Widget _messageState({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String message,
+    VoidCallback? onRetry,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 44, color: color),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
