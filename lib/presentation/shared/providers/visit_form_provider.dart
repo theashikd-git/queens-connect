@@ -1,13 +1,16 @@
 // lib/presentation/shared/providers/visit_form_provider.dart
-// Hospital search/select + free-text fallback (geocoded on submit),
-// silent GPS capture, photo, and follow-up reminder scheduling.
+// Hospital search/select + free-text fallback, silent GPS capture, photo,
+// and the follow-up, which now becomes a real SCHEDULE entry (visible in
+// the My Schedule tab) rather than only a fire-and-forget notification.
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:hospital_field_app/core/constants/app_constants.dart';
 import 'package:hospital_field_app/data/models/hospital_model.dart';
 import 'package:hospital_field_app/data/services/hospital_service.dart';
 import 'package:hospital_field_app/data/services/location_service.dart';
 import 'package:hospital_field_app/data/services/notification_service.dart';
+import 'package:hospital_field_app/data/services/schedule_service.dart';
 import 'package:hospital_field_app/data/services/visit_service.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -25,6 +28,7 @@ class VisitFormProvider extends ChangeNotifier {
   final VisitService _visitService = VisitService();
   final LocationService _locationService = LocationService();
   final HospitalService _hospitalService = HospitalService();
+  final ScheduleService _scheduleService = ScheduleService();
   final ImagePicker _imagePicker = ImagePicker();
 
   FormStatus _status = FormStatus.idle;
@@ -179,7 +183,6 @@ class VisitFormProvider extends ChangeNotifier {
     String? notes,
     String? followUpNote,
   }) async {
-    // Need either a selected hospital OR a typed name.
     final typed = manualHospitalName.trim();
     if (_selectedHospital == null && typed.isEmpty) {
       _errorMessage = 'Please search and select, or type, the hospital name.';
@@ -204,12 +207,13 @@ class VisitFormProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final hospitalName = _selectedHospital?.name ?? typed;
+
       final visitId = await _visitService.submitVisit(
         userId: userId,
         userName: userName,
         selectedHospital: _selectedHospital,
-        typedHospitalName:
-            _selectedHospital?.name ?? typed,
+        typedHospitalName: hospitalName,
         doctorName: doctorName,
         purpose: purpose,
         notes: notes,
@@ -220,11 +224,25 @@ class VisitFormProvider extends ChangeNotifier {
       );
       _successVisitId = visitId;
 
-      // Schedule the on-device reminder (best-effort).
+      // The follow-up becomes a real schedule entry, so it shows up in
+      // the My Schedule tab and can be marked done later.
       if (_followUpDate != null) {
-        final hospitalName = _selectedHospital?.name ?? typed;
+        final scheduleId = await _scheduleService.createSchedule(
+          userId: userId,
+          userName: userName,
+          hospitalId: _selectedHospital?.id,
+          hospitalName: hospitalName,
+          doctorName: doctorName,
+          scheduledAt: _followUpDate!,
+          note: followUpNote,
+          createdBy: AppConstants.scheduleBySelf,
+          originVisitId: visitId,
+        );
+
+        // The notification id is derived from the SCHEDULE id, so marking
+        // it done later cancels the right reminder.
         await NotificationService.scheduleFollowUp(
-          visitId: visitId,
+          visitId: scheduleId,
           when: _followUpDate!,
           hospitalName: hospitalName,
           doctorName: doctorName,
