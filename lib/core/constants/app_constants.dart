@@ -7,6 +7,7 @@ class AppConstants {
   static const String usersCollection = 'users';
   static const String hospitalsCollection = 'hospitals';
   static const String visitsCollection = 'visits';
+  static const String schedulesCollection = 'schedules'; // upcoming visits
 
   // --- Storage Paths ---
   static const String visitPhotosPath = 'visit_photos';
@@ -16,8 +17,7 @@ class AppConstants {
   static const double warningDistance = 300.0;
 
   // Beyond this distance, a GEOCODED hospital match is treated as
-  // unreliable (likely the wrong place) and routed to manager review
-  // instead of being auto-marked suspicious.
+  // unreliable and routed to manager review instead of auto-judged.
   static const double maxGeocodeMatchDistance = 5000.0; // 5 km
 
   // --- GPS Accuracy Threshold (meters) ---
@@ -27,19 +27,24 @@ class AppConstants {
   static const String statusValid = 'valid';
   static const String statusWarning = 'warning';
   static const String statusSuspicious = 'suspicious';
-  static const String statusUnrecognized = 'unrecognized'; // needs manager review
+  static const String statusUnrecognized = 'unrecognized';
 
   // --- Hospital coordinate source ---
-  static const String sourceDatabase = 'database';   // trusted, pre-saved
-  static const String sourceGeocoded = 'geocoded';   // found via free map API
-  static const String sourceNone = 'none';           // not found
+  static const String sourceDatabase = 'database';
+  static const String sourceGeocoded = 'geocoded';
+  static const String sourceNone = 'none';
+
+  // --- Schedule (upcoming visit) ---
+  static const String scheduleStatusPending = 'pending';
+  static const String scheduleStatusDone = 'done';
+  static const String scheduleBySelf = 'self';       // staff's own follow-up
+  static const String scheduleByManager = 'manager'; // manager assigned it
 
   // --- User Roles ---
   static const String roleUser = 'user';
   static const String roleManager = 'manager';
 
   // --- Geocoding ---
-  // Appended to the hospital name to disambiguate the free map lookup.
   static const String defaultCountry = 'Bangladesh';
   static const String geocoderUserAgent =
       'QueensConnect-FieldApp/1.0 (admin@queensconnect.com)';
