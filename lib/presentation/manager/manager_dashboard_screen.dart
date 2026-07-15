@@ -1,17 +1,24 @@
 // lib/presentation/manager/manager_dashboard_screen.dart
-// Adds: 'Unrecognized' filter chip + a Reports button in the app bar.
+// Adds: a FILTER icon (staff member + custom date range + status),
+// an ASSIGN VISIT action, and the Reports screen.
+//
+// All filtering is done in Dart on the streamed list, so Firestore never
+// needs a composite index.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:hospital_field_app/core/theme/app_theme.dart';
 import 'package:hospital_field_app/core/utils/distance_utils.dart';
+import 'package:hospital_field_app/data/models/user_model.dart';
 import 'package:hospital_field_app/data/models/visit_model.dart';
+import 'package:hospital_field_app/data/services/auth_service.dart';
 import 'package:hospital_field_app/data/services/visit_service.dart';
 import 'package:hospital_field_app/presentation/shared/providers/auth_provider.dart';
 import 'package:hospital_field_app/presentation/shared/widgets/common_widgets.dart';
 import 'package:hospital_field_app/presentation/manager/visit_detail_screen.dart';
 import 'package:hospital_field_app/presentation/manager/manager_report_screen.dart';
+import 'package:hospital_field_app/presentation/manager/assign_visit_screen.dart';
 
 class ManagerDashboardScreen extends StatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -24,8 +31,13 @@ class ManagerDashboardScreen extends StatefulWidget {
 class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
     with SingleTickerProviderStateMixin {
   final VisitService _visitService = VisitService();
+  final AuthService _authService = AuthService();
   late TabController _tabController;
-  String _selectedFilter = 'all';
+
+  String _selectedStatus = 'all';
+  UserModel? _filterStaff;
+  DateTimeRange? _filterRange;
+  List<UserModel> _staff = [];
 
   final List<Map<String, String>> _filters = [
     {'key': 'all', 'label': 'All'},
@@ -35,16 +47,189 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
     {'key': 'suspicious', 'label': 'Suspicious'},
   ];
 
+  bool get _hasExtraFilters => _filterStaff != null || _filterRange != null;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadStaff();
+  }
+
+  Future<void> _loadStaff() async {
+    try {
+      final staff = await _authService.getStaffUsers();
+      if (mounted) setState(() => _staff = staff);
+    } catch (_) {
+      // Filter dropdown will just be empty.
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // -----------------------------------------
+  //  FILTER SHEET
+  // -----------------------------------------
+
+  Future<void> _openFilterSheet() async {
+    UserModel? tempStaff = _filterStaff;
+    DateTimeRange? tempRange = _filterRange;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.cardWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppTheme.dividerColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const SectionHeader(
+                    title: 'Filter visits',
+                    subtitle: 'Narrow the list by person and date',
+                  ),
+                  const SizedBox(height: 20),
+
+                  // --- Staff dropdown ---
+                  DropdownButtonFormField<UserModel?>(
+                    value: tempStaff,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Staff member',
+                      prefixIcon: Icon(Icons.person_outline_rounded),
+                    ),
+                    items: [
+                      const DropdownMenuItem<UserModel?>(
+                        value: null,
+                        child: Text('Everyone'),
+                      ),
+                      ..._staff.map((u) => DropdownMenuItem<UserModel?>(
+                            value: u,
+                            child: Text(u.name),
+                          )),
+                    ],
+                    onChanged: (u) => setSheetState(() => tempStaff = u),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- Date range ---
+                  InkWell(
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final picked = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(now.year - 3),
+                        lastDate: now,
+                        initialDateRange: tempRange,
+                      );
+                      if (picked != null) {
+                        setSheetState(() => tempRange = picked);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Date range',
+                        prefixIcon: Icon(Icons.date_range_rounded),
+                      ),
+                      child: Text(
+                        tempRange == null
+                            ? 'Any date'
+                            : '${DateFormat('d MMM yyyy').format(tempRange!.start)} to ${DateFormat('d MMM yyyy').format(tempRange!.end)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: tempRange == null
+                              ? AppTheme.textTertiary
+                              : AppTheme.textPrimary,
+                          fontWeight: tempRange == null
+                              ? FontWeight.normal
+                              : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            setState(() {
+                              _filterStaff = null;
+                              _filterRange = null;
+                            });
+                            Navigator.pop(sheetContext);
+                          },
+                          child: const Text('Clear all'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _filterStaff = tempStaff;
+                              _filterRange = tempRange;
+                            });
+                            Navigator.pop(sheetContext);
+                          },
+                          child: const Text('Apply'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Apply staff + date filters in Dart (no Firestore index needed).
+  List<VisitModel> _applyFilters(List<VisitModel> visits) {
+    return visits.where((v) {
+      if (_filterStaff != null && v.userId != _filterStaff!.id) return false;
+      if (_filterRange != null) {
+        final start = DateTime(_filterRange!.start.year,
+            _filterRange!.start.month, _filterRange!.start.day);
+        final end = DateTime(_filterRange!.end.year, _filterRange!.end.month,
+            _filterRange!.end.day, 23, 59, 59);
+        if (v.timestamp.isBefore(start) || v.timestamp.isAfter(end)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
   }
 
   @override
@@ -67,13 +252,44 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
           ],
         ),
         actions: [
+          // Filter, with a dot when filters are active
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.filter_list_rounded),
+                tooltip: 'Filter',
+                onPressed: _openFilterSheet,
+              ),
+              if (_hasExtraFilters)
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.errorRed,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+            tooltip: 'Assign a visit',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AssignVisitScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.bar_chart_rounded),
             tooltip: 'Reports',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                  builder: (_) => const ManagerReportScreen()),
+              MaterialPageRoute(builder: (_) => const ManagerReportScreen()),
             ),
           ),
           IconButton(
@@ -103,6 +319,51 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
     );
   }
 
+  Widget _buildActiveFilterBar() {
+    if (!_hasExtraFilters) return const SizedBox.shrink();
+
+    final parts = <String>[];
+    if (_filterStaff != null) parts.add(_filterStaff!.name);
+    if (_filterRange != null) {
+      parts.add(
+          '${DateFormat('d MMM').format(_filterRange!.start)} to ${DateFormat('d MMM').format(_filterRange!.end)}');
+    }
+
+    return Container(
+      width: double.infinity,
+      color: AppTheme.primaryBlue.withValues(alpha: 0.07),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_list_rounded,
+              size: 15, color: AppTheme.primaryBlue),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Filtered: ${parts.join(' · ')}',
+              style: const TextStyle(
+                  color: AppTheme.primaryBlue,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() {
+              _filterStaff = null;
+              _filterRange = null;
+            }),
+            child: const Text('Clear',
+                style: TextStyle(
+                    color: AppTheme.errorRed,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildVisitsTab() {
     return Column(
       children: [
@@ -113,7 +374,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
             scrollDirection: Axis.horizontal,
             child: Row(
               children: _filters.map((f) {
-                final isSelected = _selectedFilter == f['key'];
+                final isSelected = _selectedStatus == f['key'];
                 Color? chipColor;
                 if (f['key'] != 'all') {
                   chipColor = AppTheme.statusColor(f['key']!);
@@ -124,7 +385,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                     label: Text(f['label']!),
                     selected: isSelected,
                     onSelected: (_) =>
-                        setState(() => _selectedFilter = f['key']!),
+                        setState(() => _selectedStatus = f['key']!),
                     selectedColor: (chipColor ?? AppTheme.primaryBlue)
                         .withValues(alpha: 0.15),
                     labelStyle: TextStyle(
@@ -147,11 +408,12 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
             ),
           ),
         ),
+        _buildActiveFilterBar(),
         Expanded(
           child: StreamBuilder<List<VisitModel>>(
-            stream: _selectedFilter == 'all'
+            stream: _selectedStatus == 'all'
                 ? _visitService.streamAllVisits()
-                : _visitService.streamVisitsByStatus(_selectedFilter),
+                : _visitService.streamVisitsByStatus(_selectedStatus),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
@@ -161,7 +423,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
               if (snapshot.hasError) {
                 return _buildErrorState();
               }
-              final visits = snapshot.data ?? [];
+              final visits = _applyFilters(snapshot.data ?? []);
               if (visits.isEmpty) {
                 return _buildEmptyState();
               }
@@ -182,47 +444,52 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
   //  EMPTY / ERROR STATES
   // -----------------------------------------
 
-  /// Friendly "nothing here" message, worded per filter.
   Widget _buildEmptyState() {
     late final IconData icon;
     late final String title;
     late final String message;
 
-    switch (_selectedFilter) {
-      case 'unrecognized':
-        icon = Icons.help_outline_rounded;
-        title = 'Nothing to review';
-        message = 'All visits have been verified automatically.\n'
-            'Visits needing your review will appear here.';
-        break;
-      case 'valid':
-        icon = Icons.check_circle_outline_rounded;
-        title = 'No valid visits yet';
-        message = 'Visits logged within 100m of the hospital\n'
-            'will show up here.';
-        break;
-      case 'warning':
-        icon = Icons.warning_amber_rounded;
-        title = 'No warnings';
-        message = 'Nothing flagged for being slightly off location.\n'
-            'That is a good sign.';
-        break;
-      case 'suspicious':
-        icon = Icons.gpp_good_rounded;
-        title = 'No suspicious visits';
-        message = 'No location mismatches detected.\n'
-            'Everything looks clean.';
-        break;
-      default:
-        icon = Icons.assignment_outlined;
-        title = 'No visits yet';
-        message = 'Once your team starts logging visits,\n'
-            'they will appear here.';
+    if (_hasExtraFilters) {
+      icon = Icons.filter_alt_off_rounded;
+      title = 'No visits match your filter';
+      message = 'Try a wider date range, or a different staff member.';
+    } else {
+      switch (_selectedStatus) {
+        case 'unrecognized':
+          icon = Icons.help_outline_rounded;
+          title = 'Nothing to review';
+          message = 'All visits have been verified automatically.\n'
+              'Visits needing your review will appear here.';
+          break;
+        case 'valid':
+          icon = Icons.check_circle_outline_rounded;
+          title = 'No valid visits yet';
+          message = 'Visits logged within 100m of the hospital\n'
+              'will show up here.';
+          break;
+        case 'warning':
+          icon = Icons.warning_amber_rounded;
+          title = 'No warnings';
+          message = 'Nothing flagged for being slightly off location.\n'
+              'That is a good sign.';
+          break;
+        case 'suspicious':
+          icon = Icons.gpp_good_rounded;
+          title = 'No suspicious visits';
+          message = 'No location mismatches detected.\n'
+              'Everything looks clean.';
+          break;
+        default:
+          icon = Icons.assignment_outlined;
+          title = 'No visits yet';
+          message = 'Once your team starts logging visits,\n'
+              'they will appear here.';
+      }
     }
 
-    final color = _selectedFilter == 'all'
+    final color = (_selectedStatus == 'all' || _hasExtraFilters)
         ? AppTheme.textTertiary
-        : AppTheme.statusColor(_selectedFilter);
+        : AppTheme.statusColor(_selectedStatus);
 
     return Center(
       child: Padding(
@@ -239,31 +506,24 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
               child: Icon(icon, size: 44, color: color),
             ),
             const SizedBox(height: 20),
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-                color: AppTheme.textPrimary,
-              ),
-            ),
+            Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    color: AppTheme.textPrimary)),
             const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 13,
-                height: 1.5,
-              ),
-            ),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 13,
+                    height: 1.5)),
           ],
         ),
       ),
     );
   }
 
-  /// Friendly error state — never dumps the raw Firestore exception at the user.
   Widget _buildErrorState() {
     return Center(
       child: Padding(
@@ -281,23 +541,17 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                   size: 44, color: AppTheme.errorRed),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Could not load visits',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-                color: AppTheme.textPrimary,
-              ),
-            ),
+            const Text('Could not load visits',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    color: AppTheme.textPrimary)),
             const SizedBox(height: 8),
             const Text(
               'Please check your internet connection\nand try again.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 13,
-                height: 1.5,
-              ),
+                  color: AppTheme.textSecondary, fontSize: 13, height: 1.5),
             ),
             const SizedBox(height: 20),
             OutlinedButton.icon(
@@ -452,7 +706,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                         ),
                       ),
                     ),
-                    const Text('Tap to review →',
+                    const Text('Tap to review',
                         style: TextStyle(
                             color: AppTheme.textSecondary, fontSize: 11)),
                   ],
@@ -465,14 +719,14 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
   }
 
   String _flagMessage(VisitModel visit) {
-    if (visit.isMockGps) return 'Mock GPS detected — review needed';
+    if (visit.isMockGps) return 'Mock GPS detected. Review needed.';
     if (visit.status == 'unrecognized') {
-      return 'Location not auto-verified — set status manually';
+      return 'Location not auto-verified. Set the status manually.';
     }
     if (visit.locationMismatch) {
-      return 'Closer to a different hospital — possible false claim';
+      return 'Closer to a different hospital. Possible false claim.';
     }
-    return 'Location mismatch — review needed';
+    return 'Location mismatch. Review needed.';
   }
 
   Widget _infoRow(IconData icon, String label, String value,
