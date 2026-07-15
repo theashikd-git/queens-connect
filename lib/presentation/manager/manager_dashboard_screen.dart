@@ -1,7 +1,5 @@
 // lib/presentation/manager/manager_dashboard_screen.dart
-// Adds: a FILTER icon (staff member + custom date range + status),
-// an ASSIGN VISIT action, and the Reports screen.
-//
+// App bar actions: Filter · Team Schedule · Assign visit · Reports · Sign out.
 // All filtering is done in Dart on the streamed list, so Firestore never
 // needs a composite index.
 
@@ -19,6 +17,7 @@ import 'package:hospital_field_app/presentation/shared/widgets/common_widgets.da
 import 'package:hospital_field_app/presentation/manager/visit_detail_screen.dart';
 import 'package:hospital_field_app/presentation/manager/manager_report_screen.dart';
 import 'package:hospital_field_app/presentation/manager/assign_visit_screen.dart';
+import 'package:hospital_field_app/presentation/manager/manager_schedule_screen.dart';
 
 class ManagerDashboardScreen extends StatefulWidget {
   const ManagerDashboardScreen({super.key});
@@ -60,9 +59,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
     try {
       final staff = await _authService.getStaffUsers();
       if (mounted) setState(() => _staff = staff);
-    } catch (_) {
-      // Filter dropdown will just be empty.
-    }
+    } catch (_) {}
   }
 
   @override
@@ -116,8 +113,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                     subtitle: 'Narrow the list by person and date',
                   ),
                   const SizedBox(height: 20),
-
-                  // --- Staff dropdown ---
                   DropdownButtonFormField<UserModel?>(
                     value: tempStaff,
                     isExpanded: true,
@@ -138,8 +133,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                     onChanged: (u) => setSheetState(() => tempStaff = u),
                   ),
                   const SizedBox(height: 16),
-
-                  // --- Date range ---
                   InkWell(
                     onTap: () async {
                       final now = DateTime.now();
@@ -176,7 +169,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
-
                   Row(
                     children: [
                       Expanded(
@@ -215,7 +207,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
     );
   }
 
-  /// Apply staff + date filters in Dart (no Firestore index needed).
   List<VisitModel> _applyFilters(List<VisitModel> visits) {
     return visits.where((v) {
       if (_filterStaff != null && v.userId != _filterStaff!.id) return false;
@@ -240,6 +231,7 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
     return Scaffold(
       backgroundColor: AppTheme.surfaceWhite,
       appBar: AppBar(
+        titleSpacing: 16,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -252,7 +244,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
           ],
         ),
         actions: [
-          // Filter, with a dot when filters are active
           Stack(
             alignment: Alignment.center,
             children: [
@@ -275,6 +266,15 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
                   ),
                 ),
             ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.event_note_rounded),
+            tooltip: 'Team schedule',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const ManagerScheduleScreen()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.person_add_alt_1_rounded),
@@ -439,10 +439,6 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen>
       ],
     );
   }
-
-  // -----------------------------------------
-  //  EMPTY / ERROR STATES
-  // -----------------------------------------
 
   Widget _buildEmptyState() {
     late final IconData icon;
