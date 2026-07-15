@@ -1,11 +1,13 @@
 // lib/presentation/manager/manager_report_screen.dart
-// Per-staff report: filter by date range, see total visits and the
-// number of distinct hospitals each person visited.
+// Per-staff report with date range + staff filter, and a Download PDF button.
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:hospital_field_app/core/theme/app_theme.dart';
+import 'package:hospital_field_app/data/models/user_model.dart';
 import 'package:hospital_field_app/data/models/visit_model.dart';
+import 'package:hospital_field_app/data/services/auth_service.dart';
+import 'package:hospital_field_app/data/services/report_pdf_service.dart';
 import 'package:hospital_field_app/data/services/visit_service.dart';
 import 'package:hospital_field_app/presentation/shared/widgets/common_widgets.dart';
 
@@ -16,30 +18,30 @@ class ManagerReportScreen extends StatefulWidget {
   State<ManagerReportScreen> createState() => _ManagerReportScreenState();
 }
 
-class _StaffReport {
-  final String userName;
-  int totalVisits = 0;
-  final Set<String> hospitals = {};
-  int valid = 0;
-  int flagged = 0; // suspicious + unrecognized
-
-  _StaffReport(this.userName);
-
-  int get distinctHospitals => hospitals.length;
-}
-
 class _ManagerReportScreenState extends State<ManagerReportScreen> {
   final VisitService _visitService = VisitService();
+  final AuthService _authService = AuthService();
 
   String _range = '30'; // '7' | '30' | 'custom'
   DateTimeRange? _customRange;
+  UserModel? _filterStaff;
+  List<UserModel> _staff = [];
 
+  bool _generatingPdf = false;
   late Future<List<VisitModel>> _future;
 
   @override
   void initState() {
     super.initState();
     _future = _load();
+    _loadStaff();
+  }
+
+  Future<void> _loadStaff() async {
+    try {
+      final staff = await _authService.getStaffUsers();
+      if (mounted) setState(() => _staff = staff);
+    } catch (_) {}
   }
 
   (DateTime, DateTime) _resolveRange() {
@@ -65,6 +67,12 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
 
   void _refresh() => setState(() => _future = _load());
 
+  /// Staff filter is applied in Dart, so no Firestore index is needed.
+  List<VisitModel> _filtered(List<VisitModel> visits) {
+    if (_filterStaff == null) return visits;
+    return visits.where((v) => v.userId == _filterStaff!.id).toList();
+  }
+
   Future<void> _pickCustomRange() async {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
@@ -86,26 +94,29 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
     }
   }
 
-  List<_StaffReport> _aggregate(List<VisitModel> visits) {
-    final map = <String, _StaffReport>{};
-    for (final v in visits) {
-      final key = v.userId.isNotEmpty ? v.userId : v.userName;
-      final r = map.putIfAbsent(key, () => _StaffReport(v.userName));
-      r.totalVisits++;
-      // Distinct hospitals: prefer stable id, fall back to name.
-      r.hospitals.add(
-        (v.hospitalId != null && v.hospitalId!.isNotEmpty)
-            ? v.hospitalId!
-            : v.manualHospitalName.toLowerCase().trim(),
+  Future<void> _downloadPdf(List<VisitModel> visits) async {
+    setState(() => _generatingPdf = true);
+    final (start, end) = _resolveRange();
+
+    try {
+      await ReportPdfService.shareReport(
+        visits: visits,
+        start: start,
+        end: end,
+        staffFilterName: _filterStaff?.name,
       );
-      if (v.status == 'valid') r.valid++;
-      if (v.status == 'suspicious' || v.status == 'unrecognized') {
-        r.flagged++;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not generate the PDF.'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _generatingPdf = false);
     }
-    final list = map.values.toList()
-      ..sort((a, b) => b.totalVisits.compareTo(a.totalVisits));
-    return list;
   }
 
   @override
@@ -122,121 +133,95 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          _buildRangeSelector(),
-          Expanded(
-            child: FutureBuilder<List<VisitModel>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                      child: CircularProgressIndicator(
-                          color: AppTheme.primaryBlue));
-                }
-                if (snapshot.hasError) {
-                  return _messageState(
-                    icon: Icons.cloud_off_rounded,
-                    color: AppTheme.errorRed,
-                    title: 'Could not load the report',
-                    message:
-                        'Please check your internet connection\nand try again.',
-                    onRetry: _refresh,
-                  );
-                }
-                final visits = snapshot.data ?? [];
-                final reports = _aggregate(visits);
-                if (reports.isEmpty) {
-                  return _messageState(
-                    icon: Icons.event_busy_rounded,
-                    color: AppTheme.textTertiary,
-                    title: 'No visits in this period',
-                    message:
-                        'No one logged a visit in the selected dates.\n'
-                        'Try a wider date range.',
-                  );
-                }
-                return ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _buildSummary(visits, reports),
-                    const SizedBox(height: 16),
-                    const SectionHeader(
-                      title: 'Per Staff Member',
-                      subtitle: 'Visits and distinct places covered',
-                    ),
-                    const SizedBox(height: 12),
-                    ...reports.map(_buildStaffCard),
-                    const SizedBox(height: 24),
-                  ],
-                );
-              },
-            ),
+          Column(
+            children: [
+              _buildFilters(),
+              Expanded(
+                child: FutureBuilder<List<VisitModel>>(
+                  future: _future,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                          child: CircularProgressIndicator(
+                              color: AppTheme.primaryBlue));
+                    }
+                    if (snapshot.hasError) {
+                      return _messageState(
+                        icon: Icons.cloud_off_rounded,
+                        color: AppTheme.errorRed,
+                        title: 'Could not load the report',
+                        message:
+                            'Please check your internet connection\nand try again.',
+                        onRetry: _refresh,
+                      );
+                    }
+
+                    final visits = _filtered(snapshot.data ?? []);
+                    final reports = ReportPdfService.aggregate(visits);
+
+                    if (reports.isEmpty) {
+                      return _messageState(
+                        icon: Icons.event_busy_rounded,
+                        color: AppTheme.textTertiary,
+                        title: 'No visits in this period',
+                        message: _filterStaff != null
+                            ? '${_filterStaff!.name} logged no visits in these dates.\nTry a wider range.'
+                            : 'No one logged a visit in the selected dates.\nTry a wider date range.',
+                      );
+                    }
+
+                    return ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        _buildSummary(visits, reports),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: _generatingPdf
+                                ? null
+                                : () => _downloadPdf(visits),
+                            icon: _generatingPdf
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.picture_as_pdf_rounded),
+                            label: Text(_generatingPdf
+                                ? 'Generating...'
+                                : 'Download PDF report'),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const SectionHeader(
+                          title: 'Per Staff Member',
+                          subtitle: 'Visits and distinct places covered',
+                        ),
+                        const SizedBox(height: 12),
+                        ...reports.map(_buildStaffCard),
+                        const SizedBox(height: 24),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
+          if (_generatingPdf)
+            const LoadingOverlay(message: 'Building your PDF...'),
         ],
       ),
     );
   }
 
-  /// Shared friendly empty/error state.
-  Widget _messageState({
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String message,
-    VoidCallback? onRetry,
-  }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 44, color: color),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 13,
-                height: 1.5,
-              ),
-            ),
-            if (onRetry != null) ...[
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('Retry'),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRangeSelector() {
+  Widget _buildFilters() {
     final (start, end) = _resolveRange();
     final label =
-        '${DateFormat('d MMM').format(start)} – ${DateFormat('d MMM yyyy').format(end)}';
+        '${DateFormat('d MMM').format(start)} to ${DateFormat('d MMM yyyy').format(end)}';
 
     Widget chip(String key, String text) {
       final selected = _range == key;
@@ -268,7 +253,7 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
     return Container(
       width: double.infinity,
       color: AppTheme.cardWhite,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -279,7 +264,28 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
               chip('custom', 'Custom'),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<UserModel?>(
+            value: _filterStaff,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Staff member',
+              prefixIcon: Icon(Icons.person_outline_rounded),
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem<UserModel?>(
+                value: null,
+                child: Text('Everyone'),
+              ),
+              ..._staff.map((u) => DropdownMenuItem<UserModel?>(
+                    value: u,
+                    child: Text(u.name),
+                  )),
+            ],
+            onChanged: (u) => setState(() => _filterStaff = u),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
               const Icon(Icons.date_range_rounded,
@@ -295,8 +301,7 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
     );
   }
 
-  Widget _buildSummary(List<VisitModel> visits, List<_StaffReport> reports) {
-    final totalVisits = visits.length;
+  Widget _buildSummary(List<VisitModel> visits, List<StaffReport> reports) {
     final distinctHospitals = <String>{};
     for (final v in visits) {
       distinctHospitals.add(
@@ -313,7 +318,7 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _summaryTile('Total Visits', '$totalVisits',
+          child: _summaryTile('Total Visits', '${visits.length}',
               Icons.assignment_turned_in_rounded, AppTheme.accentTeal),
         ),
         const SizedBox(width: 12),
@@ -349,7 +354,7 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
     );
   }
 
-  Widget _buildStaffCard(_StaffReport r) {
+  Widget _buildStaffCard(StaffReport r) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -422,4 +427,52 @@ class _ManagerReportScreenState extends State<ManagerReportScreen> {
         height: 32,
         color: AppTheme.dividerColor,
       );
+
+  Widget _messageState({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String message,
+    VoidCallback? onRetry,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 44, color: color),
+            ),
+            const SizedBox(height: 20),
+            Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    color: AppTheme.textPrimary)),
+            const SizedBox(height: 8),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 13,
+                    height: 1.5)),
+            if (onRetry != null) ...[
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
