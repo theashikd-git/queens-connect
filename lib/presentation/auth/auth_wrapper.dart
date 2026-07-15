@@ -1,12 +1,12 @@
 // lib/presentation/auth/auth_wrapper.dart
-// Queens logo on splash screen — no hospital icon
+// Staff now land on UserHomeScreen (bottom nav: Log Visit + My Schedule)
+// instead of going straight to the visit form.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:hospital_field_app/presentation/shared/providers/auth_provider.dart';
-import 'package:hospital_field_app/presentation/shared/providers/visit_form_provider.dart';
 import 'package:hospital_field_app/presentation/auth/login_screen.dart';
-import 'package:hospital_field_app/presentation/user/visit_form_screen.dart';
+import 'package:hospital_field_app/presentation/user/user_home_screen.dart';
 import 'package:hospital_field_app/presentation/manager/manager_dashboard_screen.dart';
 import 'package:hospital_field_app/core/theme/app_theme.dart';
 
@@ -29,10 +29,9 @@ class AuthWrapper extends StatelessWidget {
         if (user.isManager) {
           return const ManagerDashboardScreen();
         } else {
-          return ChangeNotifierProvider(
-            create: (_) => VisitFormProvider(),
-            child: const VisitFormScreen(),
-          );
+          // The VisitFormProvider is created inside UserHomeScreen so it
+          // is scoped to the Log Visit tab only.
+          return const UserHomeScreen();
         }
 
       case AuthStatus.unauthenticated:
@@ -53,7 +52,6 @@ class _SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // ── Queens Logo on splash ──
             Container(
               width: 120,
               height: 120,
