@@ -102,4 +102,24 @@ class AuthService {
 
     return userModel;
   }
+
+  // --- List users (manager: filter dropdown + assigning visits) ---
+
+  /// Every user in the system.
+  Future<List<UserModel>> getAllUsers() async {
+    final snap = await _firestore
+        .collection(AppConstants.usersCollection)
+        .get();
+    final users =
+        snap.docs.map((d) => UserModel.fromFirestore(d)).toList();
+    users.sort((a, b) => a.name.compareTo(b.name));
+    return users;
+  }
+
+  /// Only field executives (role == 'user'), i.e. people a manager can
+  /// assign a visit to or filter the dashboard by.
+  Future<List<UserModel>> getStaffUsers() async {
+    final all = await getAllUsers();
+    return all.where((u) => !u.isManager).toList();
+  }
 }
