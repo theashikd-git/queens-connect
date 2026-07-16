@@ -1,4 +1,4 @@
-# 🏥 Queens Connect  Hospital Field Marketing App
+# 🏥 Queens Connect | Hospital Field Marketing App
 
 A field-marketing app for pharmaceutical / medical sales teams. Field
 executives log every hospital visit from their phone, and the app
