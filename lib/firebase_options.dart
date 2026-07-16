@@ -41,8 +41,8 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDfQRB5mKcqMIxv27BylGV6qVQYySdY7o8',
-    appId: '1:606334525058:web:d5a0dc49a94d47ab50de9b',
+    apiKey: '',
+    appId: '',
     messagingSenderId: '606334525058',
     projectId: 'queens-connect-1ab54',
     authDomain: 'queens-connect-1ab54.firebaseapp.com',
@@ -50,16 +50,16 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDtWRnQQGHh98mTl35b8Esad8F3C0cBNjE',
-    appId: '1:606334525058:android:256ed2dbfc43d50950de9b',
+    apiKey: '',
+    appId: '',
     messagingSenderId: '606334525058',
     projectId: 'queens-connect-1ab54',
     storageBucket: 'queens-connect-1ab54.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBt8tc0sTkFjKL8rXKl8ZN-iCZuWrsbuoM',
-    appId: '1:606334525058:ios:b8828615ea73dcea50de9b',
+    apiKey: '',
+    appId: '',
     messagingSenderId: '606334525058',
     projectId: 'queens-connect-1ab54',
     storageBucket: 'queens-connect-1ab54.firebasestorage.app',
@@ -67,8 +67,8 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyBt8tc0sTkFjKL8rXKl8ZN-iCZuWrsbuoM',
-    appId: '1:606334525058:ios:b8828615ea73dcea50de9b',
+    apiKey: '',
+    appId: '',
     messagingSenderId: '606334525058',
     projectId: 'queens-connect-1ab54',
     storageBucket: 'queens-connect-1ab54.firebasestorage.app',
@@ -76,8 +76,8 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDfQRB5mKcqMIxv27BylGV6qVQYySdY7o8',
-    appId: '1:606334525058:web:4894241f6f833f8450de9b',
+    apiKey: '',
+    appId: '',
     messagingSenderId: '606334525058',
     projectId: 'queens-connect-1ab54',
     authDomain: 'queens-connect-1ab54.firebaseapp.com',
